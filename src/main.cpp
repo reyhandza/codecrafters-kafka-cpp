@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
       accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr), &client_addr_len);
   std::cout << "Client connected\n";
 
-  char buffer[BUFFER_SIZE];
+  char buffer[BUFFER_SIZE] = {0};
   size_t bytes = read(client_fd, buffer, sizeof(buffer) - 1);
 
   std::string_view raw_buffer(buffer, bytes);
