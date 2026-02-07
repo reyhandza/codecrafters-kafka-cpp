@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -53,16 +54,22 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in client_addr{};
   socklen_t client_addr_len = sizeof(client_addr);
 
-  // You can use print statements as follows for debugging, they'll be visible
-  // when running tests.
   std::cerr << "Logs from your program will appear here!\n";
 
-  // TODO: Uncomment the code below to pass the first stage
-  //
   int client_fd =
       accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr),
              &client_addr_len);
   std::cout << "Client connected\n";
+
+  std::int32_t message_size{0};
+  std::int32_t correlation_id{7};
+
+  std::int32_t message_size_be = htonl(message_size);
+  std::int32_t correlation_id_be = htonl(correlation_id);
+
+  send(client_fd, &message_size_be, sizeof(message_size_be), 0);
+  send(client_fd, &correlation_id_be, sizeof(message_size_be), 0);
+
   close(client_fd);
 
   close(server_fd);
