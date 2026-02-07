@@ -74,7 +74,8 @@ int main(int argc, char *argv[]) {
   std::cout << "Client connected\n";
 
   char buffer[BUFFER_SIZE];
-  size_t bytes = read(client_fd, buffer, BUFFER_SIZE);
+  size_t bytes = read(client_fd, buffer, sizeof(buffer) - 1);
+
   std::string_view raw_buffer(buffer, bytes);
   std::cout << raw_buffer << std::endl;
 
