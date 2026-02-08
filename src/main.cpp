@@ -23,7 +23,7 @@ struct HttpResponse {
 };
 
 HttpResponse parse_buffer(const char* buffer) {
-  HttpResponse resp{};
+  HttpResponse resp {};
   HttpRequest req {};
 
   ssize_t pos_correlation_id = 8;
@@ -33,11 +33,12 @@ HttpResponse parse_buffer(const char* buffer) {
   std::memcpy(&req.request_api_version, buffer + pos_api_version, sizeof(req.request_api_version));
 
   if (req.request_api_version < 5) {
-    resp.error_code = 0;
+    return resp; // 0 = SUCCESS
   } else {
-    resp.error_code = 35;
+    std::int16_t error_code = 35;
+    std::memcpy(&resp.error_code, &error_code, sizeof(error_code));
+    return resp;
   }
-  return resp;
 }
 
 class Server {
