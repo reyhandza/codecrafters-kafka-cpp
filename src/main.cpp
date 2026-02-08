@@ -33,8 +33,7 @@ HttpResponse parse_buffer(const char* buffer) {
   std::memcpy(&req.request_api_version, buffer + pos_api_version, sizeof(req.request_api_version));
 
   if (req.request_api_version > 4) {
-    resp.error_code = 35;
-    return resp;
+    resp.error_code = htons(35);
   }
 
   return resp;
