@@ -23,7 +23,7 @@ struct HttpResponse {
 };
 
 HttpResponse parse_buffer(const char* buffer) {
-  HttpResponse resp {};
+  HttpResponse resp {};   // Big N
   HttpRequest req {};
 
   ssize_t pos_correlation_id = 8;
@@ -33,7 +33,7 @@ HttpResponse parse_buffer(const char* buffer) {
   std::memcpy(&req.request_api_version, buffer + pos_api_version, sizeof(req.request_api_version));
 
   if (ntohs(req.request_api_version) > 4) {
-    resp.error_code = htonl(35);
+    resp.error_code = htons(35);
   }
 
   return resp;
