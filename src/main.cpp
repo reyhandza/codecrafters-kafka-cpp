@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <netdb.h>
 #include <optional>
@@ -13,10 +14,15 @@ using NULLABLE_STRING = std::optional<std::string>;
 constexpr int BUFFER_SIZE = 1024;
 
 struct HttpRequest {
+  std::uint32_t message_size;
   std::int16_t request_api_key;
   std::int16_t request_api_version;
-  std::int32_t correlation_id;
-  NULLABLE_STRING client_id;
+  std::uint32_t correlation_id;
+};
+
+struct HttpResponse {
+  std::uint32_t message_size;
+  std::uint32_t correlation_id;
 };
 
 class Server {
@@ -26,7 +32,7 @@ public:
     if (server_fd < 0) {
       std::cerr << "Failed to create server socket: " << std::endl;
       return -1;
-    }
+    } 
 
     int reuse = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
@@ -63,33 +69,35 @@ int main(int argc, char *argv[]) {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
 
-  struct sockaddr_in client_addr{};
-  socklen_t client_addr_len = sizeof(client_addr);
 
   std::cerr << "Logs from your program will appear here!\n";
 
   int server_fd = Server::createSocket();
-  int client_fd =
-      accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr), &client_addr_len);
-  std::cout << "Client connected\n";
 
-  char buffer[BUFFER_SIZE] = {0};
-  size_t bytes = read(client_fd, buffer, sizeof(buffer) - 1);
+  while (true) {
+    struct sockaddr_in client_addr{};
+    socklen_t client_addr_len = sizeof(client_addr);
 
-  std::string_view raw_buffer(buffer, bytes);
-  std::cout << raw_buffer << std::endl;
+    int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr), &client_addr_len);
+    std::cout << "Client connected\n";
 
-  const std::int32_t message_size{0};
-  const std::int32_t correlation_id{7};
+    char buffer[BUFFER_SIZE] = {0};
+    size_t header_complete = 12;
+    ssize_t rec_header = read(client_fd, buffer, sizeof(buffer));
 
-  const std::int32_t message_size_be = htonl(message_size);
-  const std::int32_t correlation_id_be = htonl(correlation_id);
+    if (rec_header < header_complete)
+    {
+      close(client_fd);
+      continue;
+    }
+  
+    HttpResponse resp {};
+    std::memcpy(&resp.correlation_id, buffer + 8, sizeof(resp.correlation_id));
 
-  send(client_fd, &message_size_be, sizeof(message_size_be), 0);
-  send(client_fd, &correlation_id_be, sizeof(message_size_be), 0);
-
-  close(client_fd);
+    send(client_fd, &resp, sizeof(resp), 0);
+  }
 
   close(server_fd);
+  
   return 0;
 }
