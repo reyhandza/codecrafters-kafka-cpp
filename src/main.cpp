@@ -32,13 +32,13 @@ HttpResponse parse_buffer(const char* buffer) {
   ssize_t pos_api_version = 6;
   std::memcpy(&req.request_api_version, buffer + pos_api_version, sizeof(req.request_api_version));
 
-  if (req.request_api_version < 5) {
-    return resp; // 0 = SUCCESS
-  } else {
+  if (req.request_api_version > 4) {
     std::int16_t error_code = 35;
     std::memcpy(&resp.error_code, &error_code, sizeof(error_code));
     return resp;
   }
+
+  return resp;
 }
 
 class Server {
