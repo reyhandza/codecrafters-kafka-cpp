@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <iostream>
 
-static int createSocket() {
+int Server::createSocket() {
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
     std::cerr << "Failed to create server socket: " << std::endl;
