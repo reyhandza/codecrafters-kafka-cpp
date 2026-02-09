@@ -52,7 +52,7 @@ Request parse_buffer(const char* buffer) {
 Response set_response(const Request& req) {
   Response resp {};
   
-  resp.message_size = htonl(sizeof(Response)); 
+  resp.message_size = htonl(sizeof(Response) - sizeof(Response::message_size)); 
   resp.correlation_id = req.header.correlation_id;
 
   if (ntohs(req.header.request_api_version) > 4 || ntohs(req.header.request_api_version) < 0) {
