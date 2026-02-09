@@ -9,32 +9,59 @@
 
 constexpr int BUFFER_SIZE = 1024;
 
-struct HttpRequest {
+struct RequestHeader { // 24 bytes
   std::uint32_t message_size;
   std::int16_t request_api_key;
   std::int16_t request_api_version;
   std::uint32_t correlation_id;
+  char client_id_length[2];
+  char client_id_contents[9];
+  std::int8_t TAG_BUFFER;
 };
 
-struct HttpResponse {
+struct RequestBody { // 15 bytes
+  char client_id_length[1];
+  char client_id_contents[9];
+  std::uint8_t software_version;
+  char software_version_contents[3];
+  std::int8_t TAG_BUFFER;
+};
+
+struct Request {
+  RequestHeader header;
+  RequestBody body;
+}__attribute__((packed));
+
+struct Response { // 23 bytes
   std::uint32_t message_size;
   std::uint32_t correlation_id;
   std::int16_t error_code;
-};
+  std::int8_t api_key_array_length;
+  std::int16_t api_key;
+  std::int16_t min_version;
+  std::int16_t max_version;
+  std::int8_t TAG_BUFFER1;
+  std::int32_t throttle_time_ms;
+  std::int8_t TAG_BUFFER2;
+} __attribute__((packed));
 
-HttpResponse parse_buffer(const char* buffer) {
-  HttpResponse resp {};   // Big N
-  HttpRequest req {};
+Request parse_buffer(const char* buffer) {
+    return *reinterpret_cast<const Request*>(buffer);
+}
 
-  ssize_t pos_correlation_id = 8;
-  std::memcpy(&resp.correlation_id, buffer + pos_correlation_id, sizeof(resp.correlation_id));
+Response set_response(const Request& req) {
+  Response resp {};
+  
+  resp.message_size = htonl(sizeof(Response)); 
+  resp.correlation_id = req.header.correlation_id;
 
-  ssize_t pos_api_version = 6;
-  std::memcpy(&req.request_api_version, buffer + pos_api_version, sizeof(req.request_api_version));
-
-  if (ntohs(req.request_api_version) > 4) {
+  if (ntohs(req.header.request_api_version) > 4 || ntohs(req.header.request_api_version) < 0) {
     resp.error_code = htons(35);
   }
+
+  resp.api_key_array_length = 0x02;
+  resp.api_key = htons(18);
+  resp.max_version = htons(4);
 
   return resp;
 }
@@ -86,6 +113,11 @@ int main(int argc, char *argv[]) {
   std::cerr << std::unitbuf;
   std::cerr << "Logs from your program will appear here!\n";
 
+    std::cout << "sizeof(RequestHeader): " << sizeof(RequestHeader) << std::endl;
+    std::cout << "sizeof(RequestBody): " << sizeof(RequestBody) << std::endl;
+    std::cout << "sizeof(Request): " << sizeof(Request) << std::endl;
+    std::cout << "sizeof(Response): " << sizeof(Response) << std::endl;
+
   int server_fd = Server::createSocket();
 
   while (true) {
@@ -106,8 +138,11 @@ int main(int argc, char *argv[]) {
       continue;
     };
 
-    HttpResponse response = parse_buffer(buffer);
-    write(client_fd, &response, sizeof(response));
+    Request req = parse_buffer(buffer);
+
+
+    // Response response = parse_buffer(buffer);
+    // write(client_fd, &response, sizeof(response));
   }
 
   close(server_fd);
