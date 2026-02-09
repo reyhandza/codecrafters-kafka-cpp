@@ -37,7 +37,20 @@ void handle_client(int client_fd) {
       close(client_fd);
       break;
     }
+   
+        std::cerr << "Received " << recv << " bytes:\n";
+    for (int i = 0; i < recv && i < 50; i++) {
+      std::cerr << std::hex << std::setfill('0') << std::setw(2) 
+                << (int)(unsigned char)buffer[i] << " ";
+      if ((i + 1) % 16 == 0) std::cerr << "\n";
+    }
+    std::cerr << std::dec << "\n";
     
+    // Print offset dari topic_array.length
+    std::cerr << "Header size: " << sizeof(Request::Header) << "\n";
+    std::cerr << "Byte at header end: 0x" << std::hex 
+              << (int)(unsigned char)buffer[sizeof(Request::Header)] << "\n";
+
     Request::DescribeTopicPartitions req = parse_to_topic(buffer);
     Response::DescribeTopicPartitions resp = set_response(req);
 
