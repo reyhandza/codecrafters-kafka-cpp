@@ -1,13 +1,14 @@
 #include <arpa/inet.h>
 #include <cstdint>
-#include <cstring>
 #include <iostream>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <thread>
 #include <unistd.h>
 
 constexpr int BUFFER_SIZE = 1024;
+constexpr int REQUEST_SIZE = 39;
 
 struct RequestHeader { // 24 bytes
   std::uint32_t message_size;
@@ -108,6 +109,27 @@ public:
   }
 };
 
+void handle_client(int client_fd) {
+  while (true) {
+    char buffer[BUFFER_SIZE] = {0};
+    ssize_t recv = read(client_fd, buffer, sizeof(buffer));
+    
+    if (recv < REQUEST_SIZE) {
+      close(client_fd);
+      break;
+    }
+
+    Request req = parse_buffer(buffer);
+    Response resp = set_response(req);
+
+    ssize_t sent = write(client_fd, &resp, sizeof(resp));
+    if (sent <= 0) {
+      break;
+    }
+  }
+  close(client_fd);
+}
+
 int main(int argc, char *argv[]) {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
@@ -123,20 +145,8 @@ int main(int argc, char *argv[]) {
         accept(server_fd, reinterpret_cast<struct sockaddr *>(&client_addr),
                &client_addr_len);
     std::cout << "Client connected\n";
-
-    char buffer[BUFFER_SIZE] = {0};
-    size_t complete_header = 12;
-    ssize_t rec_header = read(client_fd, buffer, sizeof(buffer));
-
-    if (rec_header < complete_header) {
-      close(client_fd);
-      continue;
-    };
-
-    Request req = parse_buffer(buffer);
-    Response resp = set_response(req);
-
-    write(client_fd, &resp, sizeof(resp));
+  
+    std::thread(handle_client, client_fd).detach();
   }
 
   close(server_fd);
