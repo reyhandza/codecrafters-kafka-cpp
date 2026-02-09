@@ -64,8 +64,9 @@ Response set_response(const Request& req) {
     resp.error_code = htons(35);
   }
 
-  resp.api_key_array_length = 0x02;
+  resp.api_key_array_length = 0x03;
   resp.api_key = htons(18);
+  resp.api_key2 = htons(75);
   resp.max_version = htons(4);
 
   return resp;
