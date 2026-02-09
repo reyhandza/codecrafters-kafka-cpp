@@ -42,8 +42,12 @@ struct Response { // 23 bytes
   std::int16_t min_version;
   std::int16_t max_version;
   std::int8_t TAG_BUFFER1;
-  std::int32_t throttle_time_ms;
+  std::int16_t api_key2;
+  std::int16_t min_version2;
+  std::int16_t max_version2;
   std::int8_t TAG_BUFFER2;
+  std::int32_t throttle_time_ms;
+  std::int8_t TAG_BUFFER3;
 } __attribute__((packed));
 
 Request parse_buffer(const char* buffer) {
