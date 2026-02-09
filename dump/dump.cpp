@@ -25,4 +25,21 @@ Request parse_buffer(const char* buffer) {
   return req;
 }
 
+Response::ApiVersion set_response(const Request::ApiVersion& req) {
+  Response::ApiVersion resp {};
+  
+  resp.message_size = htonl(sizeof(Response) - sizeof(Response::message_size)); 
+  resp.correlation_id = req.header.correlation_id;
+
+  if (ntohs(req.header.request_api_version) > 4 || ntohs(req.header.request_api_version) < 0) {
+    resp.error_code = htons(35);
+  }
+
+  resp.api_key_array_length = 0x03;
+  resp.api_key = htons(18);
+  resp.api_key2 = htons(75);
+  resp.max_version = htons(4);
+
+  return resp;
+}
 
