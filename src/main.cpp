@@ -27,7 +27,7 @@ struct RequestBody { // 15 bytes
   std::int8_t TAG_BUFFER;
 };
 
-struct Request {
+struct Request { // 39 bytes
   RequestHeader header;
   RequestBody body;
 }__attribute__((packed));
@@ -112,11 +112,6 @@ int main(int argc, char *argv[]) {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
   std::cerr << "Logs from your program will appear here!\n";
-
-    std::cout << "sizeof(RequestHeader): " << sizeof(RequestHeader) << std::endl;
-    std::cout << "sizeof(RequestBody): " << sizeof(RequestBody) << std::endl;
-    std::cout << "sizeof(Request): " << sizeof(Request) << std::endl;
-    std::cout << "sizeof(Response): " << sizeof(Response) << std::endl;
 
   int server_fd = Server::createSocket();
 
