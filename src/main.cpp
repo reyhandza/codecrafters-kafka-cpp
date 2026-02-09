@@ -139,10 +139,9 @@ int main(int argc, char *argv[]) {
     };
 
     Request req = parse_buffer(buffer);
+    Response resp = set_response(req);
 
-
-    // Response response = parse_buffer(buffer);
-    // write(client_fd, &response, sizeof(response));
+    write(client_fd, &resp, sizeof(resp));
   }
 
   close(server_fd);
