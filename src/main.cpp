@@ -1,11 +1,6 @@
-#include <arpa/inet.h>
-#include <cstdint>
+#include "server.hpp"
 #include <iostream>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <thread>
-#include <unistd.h>
 
 constexpr int BUFFER_SIZE = 1024;
 constexpr int REQUEST_SIZE = 39;
@@ -20,7 +15,7 @@ struct RequestHeader { // 24 bytes
   std::int8_t TAG_BUFFER;
 };
 
-struct RequestBody { // 15 bytes
+struct ApiVersionBodyRequest { // 15 bytes
   char client_id_length[1];
   char client_id_contents[9];
   std::uint8_t software_version;
@@ -28,9 +23,56 @@ struct RequestBody { // 15 bytes
   std::int8_t TAG_BUFFER;
 };
 
-struct Request { // 39 bytes
+struct DescribeTopicPartitionsBodyRequest { // 12 bytes
+  char client_id_length[1];
+  char client_id_contents[9];
+  std::uint8_t software_version;
+  char software_version_contents[3];
+  std::int8_t TAG_BUFFER;
+};
+
+struct RequestApiVersion { // 39 bytes
   RequestHeader header;
-  RequestBody body;
+  ApiVersionBodyRequest body;
+}__attribute__((packed));
+
+struct RequestDescribeTopicPartitions { // 36 bytes
+  RequestHeader header;
+  DescribeTopicPartitionsBodyRequest body;
+}__attribute__((packed));
+
+struct TopicName {
+  std::int8_t length; // unsigned varint
+  char contents[3];
+}__attribute__((packed));
+
+struct Topic { // 29 bytes
+  std::int16_t error_code;
+  TopicName topic_name;
+  char topic_id[16];
+  bool is_internal;
+  std::uint8_t partition_array; // unsigned varint
+  std::int32_t authorized_operations;
+  bool TAG_BUFFER;
+}__attribute__((packed));
+
+struct TopicArray {
+  std::int8_t length; // unsigned varint
+  Topic topic; 
+}__attribute__((packed));
+
+struct DescribeTopicPartitionsBodyResponse {
+  std::uint32_t throttle_time_ms;
+  TopicArray topic_array;
+  std::int8_t cursor;
+  bool TAG_BUFFER;
+}__attribute__((packed));
+
+struct ResponseDescribeTopicPartitions {
+  std::uint32_t message_size;
+  std::uint32_t correlation_id;
+  bool TAG_BUFFER;
+  DescribeTopicPartitionsBodyResponse body;
 }__attribute__((packed));
 
 struct Response { // 23 bytes
@@ -50,11 +92,11 @@ struct Response { // 23 bytes
   std::int8_t TAG_BUFFER3;
 } __attribute__((packed));
 
-Request parse_buffer(const char* buffer) {
-    return *reinterpret_cast<const Request*>(buffer);
+RequestApiVersion parse_buffer(const char* buffer) {
+    return *reinterpret_cast<const RequestApiVersion*>(buffer);
 }
 
-Response set_response(const Request& req) {
+Response set_response(const RequestApiVersion& req) {
   Response resp {};
   
   resp.message_size = htonl(sizeof(Response) - sizeof(Response::message_size)); 
@@ -72,48 +114,6 @@ Response set_response(const Request& req) {
   return resp;
 }
 
-class Server {
-public:
-  static int createSocket() {
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-      std::cerr << "Failed to create server socket: " << std::endl;
-      return -1;
-    }
-
-    int reuse = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) <
-        0) {
-      close(server_fd);
-      std::cerr << "setsockopt failed: " << std::endl;
-      return -1;
-    }
-
-    struct sockaddr_in server_addr{};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(9092);
-
-    if (bind(server_fd, reinterpret_cast<struct sockaddr *>(&server_addr),
-             sizeof(server_addr)) != 0) {
-      close(server_fd);
-      std::cerr << "Failed to bind to port 9092" << std::endl;
-      return -1;
-    }
-
-    int connection_backlog = 5;
-    if (listen(server_fd, connection_backlog) != 0) {
-      close(server_fd);
-      std::cerr << "listen failed" << std::endl;
-      return -1;
-    }
-
-    std::cout << "Waiting for a client to connect...\n";
-
-    return server_fd;
-  }
-};
-
 void handle_client(int client_fd) {
   while (true) {
     char buffer[BUFFER_SIZE] = {0};
@@ -124,7 +124,7 @@ void handle_client(int client_fd) {
       break;
     }
 
-    Request req = parse_buffer(buffer);
+    RequestApiVersion req = parse_buffer(buffer);
     Response resp = set_response(req);
 
     ssize_t sent = write(client_fd, &resp, sizeof(resp));
