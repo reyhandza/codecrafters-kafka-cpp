@@ -143,52 +143,52 @@ private:
 };
 
 class Protocol {
-  public:
+public:
   void handle_client(int client_fd){
-      while (true) {
-        int32_t message_size_be;
-        ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
-        
-        if (h_bytes <= 0) break;
+    while (true) {
+      int32_t message_size_be;
+      ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
+      
+      if (h_bytes <= 0) break;
 
-        int32_t message_size = ntohl(message_size_be);
-        if (message_size <= 0 || message_size > 1000000) break;
+      int32_t message_size = ntohl(message_size_be);
+      if (message_size <= 0 || message_size > 1000000) break;
 
-        std::vector<char> raw_buffer(message_size); 
-        ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
-        
-        if (bytes != message_size) break;
+      std::vector<char> raw_buffer(message_size); 
+      ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
+      
+      if (bytes != message_size) break;
 
-        RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
-        int16_t api_key = req_buf.ReadInt16();
-        int16_t api_version = req_buf.ReadInt16();
-        int32_t correlation_id = req_buf.ReadInt32();
-        std::string client_id = req_buf.ReadNullableString();
-        req_buf.SkipTagBuffer();
+      RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
+      int16_t api_key = req_buf.ReadInt16();
+      int16_t api_version = req_buf.ReadInt16();
+      int32_t correlation_id = req_buf.ReadInt32();
+      std::string client_id = req_buf.ReadNullableString();
+      req_buf.SkipTagBuffer();
 
-        ResponseBuffer res_buf;
-        res_buf.WriteInt32(0); // message_size
-        res_buf.WriteInt32(correlation_id);
+      ResponseBuffer res_buf;
+      res_buf.WriteInt32(0); // message_size
+      res_buf.WriteInt32(correlation_id);
 
-        if (api_key == 75) {
-          build_decribe_body_partitions_body_response(req_buf, res_buf);
-        } else if (api_key == 18) {
-          build_api_version_body_response(req_buf, res_buf);
-        } else { 
-          std::cerr << "Unknown api_key: " << api_key << std::endl; 
-        }
-        
-        int32_t response_size = htonl(res_buf.GetSize() - 4);
-        std::memcpy(res_buf.GetData().data(), &response_size, 4);
-
-        if (api_version > 4 | api_version < 0) {
-          int16_t error_code = htons(35);
-          std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
-        }
-        
-        write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
+      if (api_key == 75) {
+        build_decribe_body_partitions_body_response(req_buf, res_buf);
+      } else if (api_key == 18) {
+        build_api_version_body_response(req_buf, res_buf);
+      } else { 
+        std::cerr << "Unknown api_key: " << api_key << std::endl; 
       }
-    close(client_fd);
+      
+      int32_t response_size = htonl(res_buf.GetSize() - 4);
+      std::memcpy(res_buf.GetData().data(), &response_size, 4);
+
+      if (api_version > 4 | api_version < 0) {
+        int16_t error_code = htons(35);
+        std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
+      }
+      
+      write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
+    }
+  close(client_fd);
   }
 
 private:
