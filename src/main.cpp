@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <arpa/inet.h>
 #include <cstddef>
 #include <cstdint>
@@ -163,10 +164,11 @@ class Protocol {
         int16_t api_key = req_buf.ReadInt16();
         int16_t api_version = req_buf.ReadInt16();
         int32_t correlation_id = req_buf.ReadInt32();
+        std::string client_id = req_buf.ReadNullableString();
         req_buf.SkipTagBuffer();
 
         ResponseBuffer res_buf;
-        res_buf.WriteInt32(0);
+        res_buf.WriteInt32(0); // message_size
         res_buf.WriteInt32(correlation_id);
 
         if (api_key == 75) {
@@ -185,7 +187,33 @@ class Protocol {
 
 private:
   void build_api_version_body_response(RequestBuffer req, ResponseBuffer& res) {
+    std::string client_id = req.ReadCompactString();
+    std::string client_software_version = req.ReadCompactString();
+    req.SkipTagBuffer();
+
+    res.WriteInt32(0);
+
+    // wrong, these are response
+    int16_t error_code = 0; 
+    uint32_t api_version_array_length = req.ReadUnsignedVarint();
+    uint32_t num_api = api_version_array_length - 1;
     
+    std::vector<uint16_t> apis;
+    for (uint32_t i = 0; i < num_api; i++) { 
+
+    uint16_t api_key = req.ReadInt16();
+    apis.push_back(api_key);
+
+    uint16_t min_version = req.ReadInt16();
+    apis.push_back(min_version);
+    
+    uint16_t max_version = req.ReadInt16();
+    apis.push_back(max_version);
+
+    req.SkipTagBuffer();
+    }
+
+
   }
 
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
@@ -203,7 +231,6 @@ private:
     int8_t cursor_present = buf.ReadInt8();
     buf.SkipTagBuffer();
 
-    res.WriteInt32(0);
     res.writeTagBuffer();
 
     res.writeCompactArrayLength(topics.size());
