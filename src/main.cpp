@@ -229,8 +229,7 @@ int main(int argc, char *argv[]) {
                &client_addr_len);
     std::cout << "Client connected\n";
 
-    std::thread([client_fd] () { Protocol protocol; protocol.handle_client(client_fd); })
-      .detach();
+    std::thread([client_fd]() { Protocol conn; conn.handle_client(client_fd); }).detach();
   }
 
   close(server_fd);
