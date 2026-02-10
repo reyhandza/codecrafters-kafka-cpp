@@ -169,7 +169,6 @@ class Protocol {
         ResponseBuffer res_buf;
         res_buf.WriteInt32(0); // message_size
         res_buf.WriteInt32(correlation_id);
-        res_buf.writeTagBuffer();
 
         if (api_key == 75) {
           build_decribe_body_partitions_body_response(req_buf, res_buf);
@@ -232,6 +231,7 @@ private:
     int8_t cursor_present = buf.ReadInt8();
     buf.SkipTagBuffer();
 
+    res.writeTagBuffer();
     res.WriteInt32(0); // throttle_ms
 
     res.writeCompactArrayLength(topics.size());
