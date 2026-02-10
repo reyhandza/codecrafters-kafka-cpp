@@ -21,7 +21,7 @@ public:
 
   std::vector<uint8_t> GetData() const { return buffer; }
   
-  int8_t ReadInt8() { return static_cast<uint8_t>(buffer[read_offset++]); }
+  int8_t ReadInt8() { return static_cast<int8_t>(buffer[read_offset++]); }
   int16_t ReadInt16() {
     int16_t val;
     std::memcpy(&val, &buffer[read_offset], sizeof(int16_t));
@@ -136,65 +136,106 @@ private:
 class Protocol {
   public:
   void handle_client(int client_fd){
-    while (true) {
-      int32_t message_size_be;
-      ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
+    try {
+      while (true) {
+        int32_t message_size_be;
+        ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
+        
+        if (h_bytes <= 0) { 
+          std::cerr << "Connection closed or error on header read\n";
+          break; 
+        }
 
-      int32_t message_size = ntohl(message_size_be);
-      if (message_size > h_bytes) { break; } // message is incomplete
+        int32_t message_size = ntohl(message_size_be);
+        std::cerr << "Message size: " << message_size << std::endl;
+        
+        if (message_size <= 0 || message_size > 1000000) { 
+          std::cerr << "Invalid message size\n";
+          break; 
+        }
 
-      std::vector<char> raw_buffer(message_size); 
-      ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
+        std::vector<char> raw_buffer(message_size); 
+        ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
+        
+        if (bytes != message_size) {
+          std::cerr << "Incomplete message received\n";
+          break;
+        }
 
-      RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
-      int16_t api_key = req_buf.ReadInt16();
-      int16_t api_version = req_buf.ReadInt16();
-      int32_t correlation_id = req_buf.ReadInt32();
-      std::string client_id = req_buf.ReadCompactString();
-      req_buf.SkipTagBuffer();
+        RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
+        int16_t api_key = req_buf.ReadInt16();
+        int16_t api_version = req_buf.ReadInt16();
+        int32_t correlation_id = req_buf.ReadInt32();
+        
+        std::cerr << "API Key: " << api_key << ", Version: " << api_version 
+                  << ", Correlation ID: " << correlation_id << std::endl;
+        
+        std::string client_id = req_buf.ReadCompactString();
+        req_buf.SkipTagBuffer();
 
-      ResponseBuffer res_buf;
-      res_buf.WriteInt32(0);
-      res_buf.WriteInt32(correlation_id);
+        ResponseBuffer res_buf;
+        res_buf.WriteInt32(0);
+        res_buf.WriteInt32(correlation_id);
 
-      if (api_key == 75) {
-        build_decribe_body_partitions_body_response(req_buf, res_buf);
-      } else { std::cerr << "Unknown api_key" << std::endl; }
-      
-      int32_t response_size = htonl(res_buf.GetSize() - 4);
-      std::memcpy(const_cast<uint8_t*>(res_buf.GetData().data()), &response_size, 4);
-      
-      write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
+        if (api_key == 75) {
+          std::cerr << "Processing DescribeTopicPartitions request\n";
+          build_decribe_body_partitions_body_response(req_buf, res_buf);
+          std::cerr << "Response built successfully\n";
+        } else { 
+          std::cerr << "Unknown api_key: " << api_key << std::endl; 
+        }
+        
+        int32_t response_size = htonl(res_buf.GetSize() - 4);
+        std::memcpy(const_cast<uint8_t*>(res_buf.GetData().data()), &response_size, 4);
+        
+        std::cerr << "Sending response of size: " << res_buf.GetSize() << std::endl;
+        write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
+        std::cerr << "Response sent\n";
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "Exception in handle_client: " << e.what() << std::endl;
+    } catch (...) {
+      std::cerr << "Unknown exception in handle_client\n";
     }
-  close(client_fd);
+    close(client_fd);
   }
 
 private:
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
+    std::cerr << "Reading topics array length\n";
     uint32_t topic_array_length = buf.ReadUnsignedVarint();
     uint32_t num_topics = topic_array_length - 1;
+    std::cerr << "Number of topics: " << num_topics << std::endl;
 
     std::vector<std::string> topics;
     for (uint32_t i = 0; i < num_topics; i++) {
       std::string topic_name = buf.ReadCompactString();
+      std::cerr << "Topic[" << i << "]: " << topic_name << std::endl;
       buf.SkipTagBuffer();
       topics.push_back(topic_name);
     }
 
     // Read ResponsePartitionLimit
+    std::cerr << "Reading ResponsePartitionLimit\n";
     int32_t response_partition_limit = buf.ReadInt32();
+    std::cerr << "ResponsePartitionLimit: " << response_partition_limit << std::endl;
     
     // Read Cursor (nullable)
+    std::cerr << "Reading Cursor\n";
     int8_t cursor_present = buf.ReadInt8();
+    std::cerr << "Cursor present flag: " << (int)cursor_present << std::endl;
     if (cursor_present != -1) {
+      std::cerr << "Cursor is present (not null)\n";
       // If cursor is present, read cursor fields
       // For now, we'll skip cursor implementation
     }
     
     // Read tag buffer after cursor
+    std::cerr << "Reading tag buffer after cursor\n";
     buf.SkipTagBuffer();
 
     // Now build response
+    std::cerr << "Building response\n";
     res.WriteInt32(0); // throttle_time_ms
     res.writeTagBuffer();
 
