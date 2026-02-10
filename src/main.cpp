@@ -138,18 +138,19 @@ class Protocol {
   void handle_client(int client_fd){
     while (true) {
       int32_t message_size_be;
-      ssize_t bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
+      ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
 
       int32_t message_size = ntohl(message_size_be);
-      if (message_size > bytes) { break; } // message is incomplete
+      if (message_size > h_bytes) { break; } // message is incomplete
 
       std::vector<char> raw_buffer(message_size); 
-      bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
+      ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
 
-      RequestBuffer req_buf(raw_buffer.data(), raw_buffer.size());
+      RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
       int16_t api_key = req_buf.ReadInt16();
       int16_t api_version = req_buf.ReadInt16();
       int32_t correlation_id = req_buf.ReadInt32();
+      std::string client_id = req_buf.ReadCompactString();
       req_buf.SkipTagBuffer();
 
       ResponseBuffer res_buf;
