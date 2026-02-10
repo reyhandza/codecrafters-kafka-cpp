@@ -41,7 +41,6 @@ public:
     int i = 0;
     uint8_t b;
     do {
-        if (read_offset >= buffer.size()) throw std::runtime_error("Buffer underflow");
         b = buffer[read_offset++];
         value |= (b & 0x7f) << (7 * i);
         i++;
@@ -54,7 +53,6 @@ public:
     if (len == 0) return ""; // Null
     len -= 1; // N+1
 
-    if (read_offset + len > buffer.size()) throw std::runtime_error("Buffer underflow string");
     
     std::string s(buffer.begin() + read_offset, buffer.begin() + read_offset + len);
     read_offset += len;
