@@ -83,13 +83,13 @@ public:
   void WriteInt8(const int8_t& val) { buffer.push_back(val); }
   void WriteInt16(const int16_t& val) {
     int16_t val_n = htons(val);
-    const int8_t* ptr = reinterpret_cast<const int8_t*>(val_n);
+    const int8_t* ptr = reinterpret_cast<const int8_t*>(&val_n);
     buffer.insert(buffer.end(), ptr, ptr + sizeof(int16_t));
   }
 
   void WriteInt32(const int32_t& val) {
     int32_t val_n = htonl(val);
-    const int8_t* ptr = reinterpret_cast<const int8_t*>(val_n);
+    const int8_t* ptr = reinterpret_cast<const int8_t*>(&val_n);
     buffer.insert(buffer.end(), ptr, ptr + sizeof(int32_t));
   }
 
@@ -144,7 +144,7 @@ class Protocol {
       if (message_size > bytes) { break; } // message is incomplete
 
       std::vector<char> raw_buffer(message_size); 
-      bytes = recv(client_fd, &raw_buffer, message_size, MSG_WAITALL);
+      bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
 
       RequestBuffer req_buf(raw_buffer.data(), raw_buffer.size());
       int16_t api_key = req_buf.ReadInt16();
@@ -160,7 +160,7 @@ class Protocol {
         build_decribe_body_partitions_body_response(req_buf, res_buf);
       } else { std::cerr << "Unknown api_key" << std::endl; }
       
-      int32_t response_size = htonl(sizeof(res_buf) - 4);
+      int32_t response_size = htonl(res_buf.GetSize() - 4);
       std::memcpy(const_cast<uint8_t*>(res_buf.GetData().data()), &response_size, 4);
       
       write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
@@ -169,7 +169,7 @@ class Protocol {
   }
 
 private:
-  void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer res) {
+  void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
     int8_t topic_array_length = buf.ReadUnsignedVarint();
     int8_t num_topics = topic_array_length - 1;
 
