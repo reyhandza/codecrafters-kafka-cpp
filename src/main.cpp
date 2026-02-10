@@ -198,6 +198,7 @@ private:
     std::string client_software_version = req.ReadCompactString();
     req.SkipTagBuffer();
 
+    res.writeTagBuffer();
     int16_t error_code = 0;
     res.WriteInt32(error_code);
    
@@ -213,25 +214,6 @@ private:
 
     res.WriteInt32(0); // throttle_ms
     res.writeTagBuffer();
-    
-    // wrong, these are response
-    uint32_t api_version_array_length = req.ReadUnsignedVarint();
-    uint32_t num_api = api_version_array_length - 1;
-    
-    std::vector<uint16_t> apis;
-    for (uint32_t i = 0; i < num_api; i++) { 
-
-    uint16_t api_key = req.ReadInt16();
-    apis.push_back(api_key);
-
-    uint16_t min_version = req.ReadInt16();
-    apis.push_back(min_version);
-    
-    uint16_t max_version = req.ReadInt16();
-    apis.push_back(max_version);
-
-    req.SkipTagBuffer();
-    }
   }
 
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
