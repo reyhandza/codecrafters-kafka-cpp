@@ -171,17 +171,31 @@ class Protocol {
 
 private:
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
-    int8_t topic_array_length = buf.ReadUnsignedVarint();
-    int8_t num_topics = topic_array_length - 1;
+    uint32_t topic_array_length = buf.ReadUnsignedVarint();
+    uint32_t num_topics = topic_array_length - 1;
 
     std::vector<std::string> topics;
-    for (int32_t i = 0; i < num_topics; i++) {
+    for (uint32_t i = 0; i < num_topics; i++) {
       std::string topic_name = buf.ReadCompactString();
       buf.SkipTagBuffer();
       topics.push_back(topic_name);
     }
 
-    res.WriteInt32(0);
+    // Read ResponsePartitionLimit
+    int32_t response_partition_limit = buf.ReadInt32();
+    
+    // Read Cursor (nullable)
+    int8_t cursor_present = buf.ReadInt8();
+    if (cursor_present != -1) {
+      // If cursor is present, read cursor fields
+      // For now, we'll skip cursor implementation
+    }
+    
+    // Read tag buffer after cursor
+    buf.SkipTagBuffer();
+
+    // Now build response
+    res.WriteInt32(0); // throttle_time_ms
     res.writeTagBuffer();
 
     res.writeCompactArrayLength(topics.size());
@@ -235,4 +249,3 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
-
