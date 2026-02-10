@@ -230,8 +230,8 @@ private:
     int8_t cursor_present = buf.ReadInt8();
     buf.SkipTagBuffer();
 
-    res.WriteInt32(0); // throttle_ms
     res.writeTagBuffer();
+    res.WriteInt32(0); // throttle_ms
 
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
