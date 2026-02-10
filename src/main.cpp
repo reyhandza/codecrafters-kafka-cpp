@@ -169,6 +169,7 @@ class Protocol {
         ResponseBuffer res_buf;
         res_buf.WriteInt32(0); // message_size
         res_buf.WriteInt32(correlation_id);
+        res_buf.writeTagBuffer();
 
         if (api_key == 75) {
           build_decribe_body_partitions_body_response(req_buf, res_buf);
@@ -198,9 +199,8 @@ private:
     std::string client_software_version = req.ReadCompactString();
     req.SkipTagBuffer();
 
-    res.writeTagBuffer();
     int16_t error_code = 0;
-    res.WriteInt32(error_code);
+    res.WriteInt16(error_code);
    
     res.writeCompactArrayLength(num_apis);
     res.WriteInt16(api_version_key);
@@ -231,9 +231,7 @@ private:
     int8_t cursor_present = buf.ReadInt8();
     buf.SkipTagBuffer();
 
-    res.writeTagBuffer();
     res.WriteInt32(0); // throttle_ms
-
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
       int16_t error_code = 3;
