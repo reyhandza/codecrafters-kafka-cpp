@@ -181,9 +181,9 @@ class Protocol {
         int32_t response_size = htonl(res_buf.GetSize() - 4);
         std::memcpy(res_buf.GetData().data(), &response_size, 4);
 
-        if (api_version > 4 || api_version < 0) {
-          int16_t error_code = htonl(35);
-          std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
+        if (api_version > 4 | api_version < 0) {
+          int16_t error_code = htons(35);
+          std::memcpy(res_buf.GetData().data() + 7, &error_code, 2);
         }
         
         write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
