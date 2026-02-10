@@ -59,6 +59,15 @@ public:
     return s;
   }
 
+  std::string ReadNullableString() {
+    int16_t len = ReadInt16();
+    if (len == -1) return ""; // Null
+    
+    std::string s(buffer.begin() + read_offset, buffer.begin() + read_offset + len);
+    read_offset += len;
+    return s;
+  }
+
   void SkipTagBuffer() {
     uint32_t num_tags = ReadUnsignedVarint();
   }
@@ -170,8 +179,14 @@ class Protocol {
         std::cerr << "API Key: " << api_key << ", Version: " << api_version 
                   << ", Correlation ID: " << correlation_id << std::endl;
         
-        std::string client_id = req_buf.ReadCompactString();
+        // For DescribeTopicPartitions v0, header uses v1 format (non-flexible)
+        // client_id is NULLABLE_STRING (int16 length), not compact string
+        std::string client_id = req_buf.ReadNullableString();
+        std::cerr << "Client ID: " << client_id << std::endl;
+        
+        // Header v1 with flexible API body still has tag buffer after client_id
         req_buf.SkipTagBuffer();
+        std::cerr << "Header parsed, starting body\n";
 
         ResponseBuffer res_buf;
         res_buf.WriteInt32(0);
