@@ -188,7 +188,7 @@ class Protocol {
   }
 
 private:
-  const uint16_t num_apis = 2;
+  const uint32_t num_apis = 2;
   const uint16_t min_version = 0;
   const uint16_t max_version = 4;
   const uint16_t api_version_key = 18;
@@ -202,7 +202,8 @@ private:
     int16_t error_code = 0;
     res.WriteInt16(error_code);
    
-    res.writeCompactArrayLength(2);
+    res.writeCompactArrayLength(num_apis);
+
     res.WriteInt16(api_version_key);
     res.WriteInt16(min_version);
     res.WriteInt16(max_version);
