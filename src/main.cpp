@@ -231,6 +231,7 @@ private:
     buf.SkipTagBuffer();
 
     res.WriteInt32(0); // throttle_ms
+    res.writeTagBuffer();
 
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
