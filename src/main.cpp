@@ -172,6 +172,8 @@ class Protocol {
 
         if (api_key == 75) {
           build_decribe_body_partitions_body_response(req_buf, res_buf);
+        } else if (api_key == 18) {
+          build_api_version_body_response(req_buf, res_buf);
         } else { 
           std::cerr << "Unknown api_key: " << api_key << std::endl; 
         }
