@@ -145,7 +145,6 @@ private:
 class Protocol {
   public:
   void handle_client(int client_fd){
-    try {
       while (true) {
         int32_t message_size_be;
         ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
@@ -164,7 +163,6 @@ class Protocol {
         int16_t api_key = req_buf.ReadInt16();
         int16_t api_version = req_buf.ReadInt16();
         int32_t correlation_id = req_buf.ReadInt32();
-        std::string client_id = req_buf.ReadNullableString();
         req_buf.SkipTagBuffer();
 
         ResponseBuffer res_buf;
@@ -182,13 +180,14 @@ class Protocol {
         
         write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
       }
-    } catch (const std::exception& e) {
-      std::cerr << "Exception: " << e.what() << std::endl;
-    }
     close(client_fd);
   }
 
 private:
+  void build_api_version_body_response(RequestBuffer req, ResponseBuffer& res) {
+    
+  }
+
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
     uint32_t topic_array_length = buf.ReadUnsignedVarint();
     uint32_t num_topics = topic_array_length - 1;
