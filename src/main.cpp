@@ -183,7 +183,7 @@ class Protocol {
 
         if (api_version > 4 | api_version < 0) {
           int16_t error_code = htons(35);
-          std::memcpy(res_buf.GetData().data() + 7, &error_code, 2);
+          std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
         }
         
         write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
