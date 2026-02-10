@@ -185,15 +185,34 @@ class Protocol {
   }
 
 private:
+  const uint16_t num_apis = 2;
+  const uint16_t min_version = 0;
+  const uint16_t max_version = 4;
+  const uint16_t api_version_key = 18;
+  const uint16_t api_describe_topic_partitions = 75;
+
   void build_api_version_body_response(RequestBuffer req, ResponseBuffer& res) {
     std::string client_id = req.ReadCompactString();
     std::string client_software_version = req.ReadCompactString();
     req.SkipTagBuffer();
 
-    res.WriteInt32(0);
+    int16_t error_code = 0;
+    res.WriteInt32(error_code);
+   
+    res.writeCompactArrayLength(num_apis);
+    res.WriteInt16(api_version_key);
+    res.WriteInt16(min_version);
+    res.WriteInt16(max_version);
+    res.writeTagBuffer();
+    res.WriteInt16(api_describe_topic_partitions);
+    res.WriteInt16(min_version);
+    res.WriteInt16(min_version);
+    res.writeTagBuffer();
 
+    res.WriteInt32(0); // throttle_ms
+    res.writeTagBuffer();
+    
     // wrong, these are response
-    int16_t error_code = 0; 
     uint32_t api_version_array_length = req.ReadUnsignedVarint();
     uint32_t num_api = api_version_array_length - 1;
     
@@ -211,8 +230,6 @@ private:
 
     req.SkipTagBuffer();
     }
-
-
   }
 
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
