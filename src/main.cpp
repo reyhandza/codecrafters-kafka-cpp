@@ -160,9 +160,7 @@ class Protocol {
 
       if (api_key == 75) {
         build_decribe_body_partitions_body_response(req_buf, res_buf);
-      } else if (api_key == 18) {
-        build_api_version_body_response(req_buf, res_buf);
-      } else {}
+      } else { std::cerr << "Unknown api_key" << std::endl; }
       
       int32_t response_size = htonl(sizeof(res_buf) - 4);
       std::memcpy(const_cast<uint8_t*>(res_buf.GetData().data()), &response_size, 4);
@@ -173,8 +171,6 @@ class Protocol {
   }
 
 private:
-  void build_api_version_body_response(RequestBuffer req, ResponseBuffer res);
-
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer res) {
     int8_t topic_array_length = buf.ReadUnsignedVarint();
     int8_t num_topics = topic_array_length - 1;
