@@ -202,7 +202,7 @@ private:
     int16_t error_code = 0;
     res.WriteInt16(error_code);
    
-    res.writeCompactArrayLength(num_apis);
+    res.writeCompactArrayLength(2);
     res.WriteInt16(api_version_key);
     res.WriteInt16(min_version);
     res.WriteInt16(max_version);
@@ -232,6 +232,7 @@ private:
     buf.SkipTagBuffer();
 
     res.WriteInt32(0); // throttle_ms
+
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
       int16_t error_code = 3;
