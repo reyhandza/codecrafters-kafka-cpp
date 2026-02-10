@@ -50,9 +50,8 @@ public:
 
   std::string ReadCompactString() {
     uint32_t len = ReadUnsignedVarint(); 
-    if (len == 0) return ""; // Null
-    len -= 1; // N+1
-
+    if (len == 0) return "";
+    len -= 1;
     
     std::string s(buffer.begin() + read_offset, buffer.begin() + read_offset + len);
     read_offset += len;
@@ -61,7 +60,7 @@ public:
 
   std::string ReadNullableString() {
     int16_t len = ReadInt16();
-    if (len == -1) return ""; // Null
+    if (len == -1) return "";
     
     std::string s(buffer.begin() + read_offset, buffer.begin() + read_offset + len);
     read_offset += len;
@@ -86,7 +85,8 @@ public:
     buffer.assign(raw_buffer, raw_buffer + size);
   }
 
-  std::vector<uint8_t> GetData() const { return buffer; }
+  std::vector<uint8_t>& GetData() { return buffer; }
+  const std::vector<uint8_t>& GetData() const { return buffer; }
   size_t GetSize() const { return buffer.size(); }
 
   void WriteInt8(const int8_t& val) { buffer.push_back(val); }
@@ -108,7 +108,7 @@ public:
 
   void writeUnsignedVarint(uint32_t value) {
     while ((value & 0xffffff80) != 0L) {
-      uint8_t b = (value & 0x7f) | 0x80; // Set MSB bit to 1 (continuation)
+      uint8_t b = (value & 0x7f) | 0x80;
       buffer.push_back(b);
       value >>= 7;
     }
@@ -150,108 +150,61 @@ class Protocol {
         int32_t message_size_be;
         ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
         
-        if (h_bytes <= 0) { 
-          std::cerr << "Connection closed or error on header read\n";
-          break; 
-        }
+        if (h_bytes <= 0) break;
 
         int32_t message_size = ntohl(message_size_be);
-        std::cerr << "Message size: " << message_size << std::endl;
-        
-        if (message_size <= 0 || message_size > 1000000) { 
-          std::cerr << "Invalid message size\n";
-          break; 
-        }
+        if (message_size <= 0 || message_size > 1000000) break;
 
         std::vector<char> raw_buffer(message_size); 
         ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
         
-        if (bytes != message_size) {
-          std::cerr << "Incomplete message received\n";
-          break;
-        }
+        if (bytes != message_size) break;
 
         RequestBuffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
         int16_t api_key = req_buf.ReadInt16();
         int16_t api_version = req_buf.ReadInt16();
         int32_t correlation_id = req_buf.ReadInt32();
-        
-        std::cerr << "API Key: " << api_key << ", Version: " << api_version 
-                  << ", Correlation ID: " << correlation_id << std::endl;
-        
-        // For DescribeTopicPartitions v0, header uses v1 format (non-flexible)
-        // client_id is NULLABLE_STRING (int16 length), not compact string
         std::string client_id = req_buf.ReadNullableString();
-        std::cerr << "Client ID: " << client_id << std::endl;
-        
-        // Header v1 with flexible API body still has tag buffer after client_id
         req_buf.SkipTagBuffer();
-        std::cerr << "Header parsed, starting body\n";
 
         ResponseBuffer res_buf;
         res_buf.WriteInt32(0);
         res_buf.WriteInt32(correlation_id);
 
         if (api_key == 75) {
-          std::cerr << "Processing DescribeTopicPartitions request\n";
           build_decribe_body_partitions_body_response(req_buf, res_buf);
-          std::cerr << "Response built successfully\n";
         } else { 
           std::cerr << "Unknown api_key: " << api_key << std::endl; 
         }
         
         int32_t response_size = htonl(res_buf.GetSize() - 4);
-        std::memcpy(const_cast<uint8_t*>(res_buf.GetData().data()), &response_size, 4);
+        std::memcpy(res_buf.GetData().data(), &response_size, 4);
         
-        std::cerr << "Sending response of size: " << res_buf.GetSize() << std::endl;
         write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
-        std::cerr << "Response sent\n";
       }
     } catch (const std::exception& e) {
-      std::cerr << "Exception in handle_client: " << e.what() << std::endl;
-    } catch (...) {
-      std::cerr << "Unknown exception in handle_client\n";
+      std::cerr << "Exception: " << e.what() << std::endl;
     }
     close(client_fd);
   }
 
 private:
   void build_decribe_body_partitions_body_response(RequestBuffer buf, ResponseBuffer& res) {
-    std::cerr << "Reading topics array length\n";
     uint32_t topic_array_length = buf.ReadUnsignedVarint();
     uint32_t num_topics = topic_array_length - 1;
-    std::cerr << "Number of topics: " << num_topics << std::endl;
 
     std::vector<std::string> topics;
     for (uint32_t i = 0; i < num_topics; i++) {
       std::string topic_name = buf.ReadCompactString();
-      std::cerr << "Topic[" << i << "]: " << topic_name << std::endl;
       buf.SkipTagBuffer();
       topics.push_back(topic_name);
     }
 
-    // Read ResponsePartitionLimit
-    std::cerr << "Reading ResponsePartitionLimit\n";
     int32_t response_partition_limit = buf.ReadInt32();
-    std::cerr << "ResponsePartitionLimit: " << response_partition_limit << std::endl;
-    
-    // Read Cursor (nullable)
-    std::cerr << "Reading Cursor\n";
     int8_t cursor_present = buf.ReadInt8();
-    std::cerr << "Cursor present flag: " << (int)cursor_present << std::endl;
-    if (cursor_present != -1) {
-      std::cerr << "Cursor is present (not null)\n";
-      // If cursor is present, read cursor fields
-      // For now, we'll skip cursor implementation
-    }
-    
-    // Read tag buffer after cursor
-    std::cerr << "Reading tag buffer after cursor\n";
     buf.SkipTagBuffer();
 
-    // Now build response
-    std::cerr << "Building response\n";
-    res.WriteInt32(0); // throttle_time_ms
+    res.WriteInt32(0);
     res.writeTagBuffer();
 
     res.writeCompactArrayLength(topics.size());
