@@ -209,7 +209,7 @@ private:
 
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
-      int16_t error_code = 0;
+      int16_t error_code = 3;
       res.WriteInt16(error_code);
 
       res.writeCompactString(topic);
