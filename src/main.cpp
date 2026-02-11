@@ -54,28 +54,28 @@ private:
       req.SkipTagBuffer();
   }
   
-  void build_response(const HeaderV0& header, Buffer& req_buf, Buffer& res_buf) {
+  void build_response(const HeaderV0& src, Buffer& req_buf, Buffer& res_buf) {
       res_buf.WriteInt32(0); // message_size
-      res_buf.WriteInt32(header.correlation_id);
+      res_buf.WriteInt32(src.correlation_id);
 
-      if (header.api_key == api_describe_topic_partitions) {
+      if (src.api_key == api_describe_topic_partitions) {
         build_decribe_body_partitions_body_response(req_buf, res_buf);
-      } else if (header.api_key == api_version_key) {
+      } else if (src.api_key == api_version_key) {
         build_api_version_body_response(req_buf, res_buf);
       } else { 
-        std::cerr << "Unknown api_key: " << header.api_key << std::endl; 
+        std::cerr << "Unknown api_key: " << src.api_key << std::endl; 
       }
       
       int32_t response_size = htonl(res_buf.GetSize() - 4);
       std::memcpy(res_buf.GetData().data(), &response_size, 4);
 
-      if (header.api_version > 4 | header.api_version < 0) {
+      if (src.api_version > 4 | src.api_version < 0) {
         int16_t error_code = htons(35);
         std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
       }
   }
 
-  void build_api_version_body_response(Buffer req, Buffer& res) {
+  void build_api_version_body_response(Buffer& req, Buffer& res) {
     std::string client_id = req.ReadCompactString();
     std::string client_software_version = req.ReadCompactString();
     req.SkipTagBuffer();
@@ -97,7 +97,7 @@ private:
     res.writeTagBuffer();
   }
 
-  void build_decribe_body_partitions_body_response(Buffer buf, Buffer& res) {
+  void build_decribe_body_partitions_body_response(Buffer& buf, Buffer& res) {
     uint32_t topic_array_length = buf.ReadUnsignedVarint();
     uint32_t num_topics = topic_array_length - 1;
 
