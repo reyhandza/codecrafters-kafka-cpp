@@ -1,7 +1,16 @@
+#include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <thread>
 #include "server.hpp"
 #include "buffer.hpp"
+
+struct HeaderV0 {
+  int16_t api_key;
+  int16_t api_version;
+  int32_t correlation_id;
+  std::string client_id;
+};
 
 class Protocol {
 public:
@@ -9,7 +18,6 @@ public:
     while (true) {
       int32_t message_size_be;
       ssize_t h_bytes = recv(client_fd, &message_size_be, 4, MSG_WAITALL);
-      
       if (h_bytes <= 0) break;
 
       int32_t message_size = ntohl(message_size_be);
@@ -17,36 +25,15 @@ public:
 
       std::vector<char> raw_buffer(message_size); 
       ssize_t bytes = recv(client_fd, raw_buffer.data(), message_size, MSG_WAITALL);
-      
       if (bytes != message_size) break;
 
       Buffer req_buf(reinterpret_cast<char*>(raw_buffer.data()), raw_buffer.size());
-      int16_t api_key = req_buf.ReadInt16();
-      int16_t api_version = req_buf.ReadInt16();
-      int32_t correlation_id = req_buf.ReadInt32();
-      std::string client_id = req_buf.ReadNullableString();
-      req_buf.SkipTagBuffer();
+      HeaderV0 req_header;
+      read_request_header(req_buf, req_header);
 
       Buffer res_buf;
-      res_buf.WriteInt32(0); // message_size
-      res_buf.WriteInt32(correlation_id);
+      build_response(req_header, req_buf, res_buf);
 
-      if (api_key == 75) {
-        build_decribe_body_partitions_body_response(req_buf, res_buf);
-      } else if (api_key == 18) {
-        build_api_version_body_response(req_buf, res_buf);
-      } else { 
-        std::cerr << "Unknown api_key: " << api_key << std::endl; 
-      }
-      
-      int32_t response_size = htonl(res_buf.GetSize() - 4);
-      std::memcpy(res_buf.GetData().data(), &response_size, 4);
-
-      if (api_version > 4 | api_version < 0) {
-        int16_t error_code = htons(35);
-        std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
-      }
-      
       write(client_fd, res_buf.GetData().data(), res_buf.GetSize());
     }
   close(client_fd);
@@ -59,6 +46,35 @@ private:
   const uint16_t api_version_key = 18;
   const uint16_t api_describe_topic_partitions = 75;
 
+  void read_request_header(Buffer& req, HeaderV0& dst) {
+      int16_t api_key = req.ReadInt16();
+      int16_t api_version = req.ReadInt16();
+      int32_t correlation_id = req.ReadInt32();
+      std::string client_id = req.ReadNullableString();
+      req.SkipTagBuffer();
+  }
+  
+  void build_response(const HeaderV0& header, Buffer& req_buf, Buffer& res_buf) {
+      res_buf.WriteInt32(0); // message_size
+      res_buf.WriteInt32(header.correlation_id);
+
+      if (header.api_key == api_describe_topic_partitions) {
+        build_decribe_body_partitions_body_response(req_buf, res_buf);
+      } else if (header.api_key == api_version_key) {
+        build_api_version_body_response(req_buf, res_buf);
+      } else { 
+        std::cerr << "Unknown api_key: " << header.api_key << std::endl; 
+      }
+      
+      int32_t response_size = htonl(res_buf.GetSize() - 4);
+      std::memcpy(res_buf.GetData().data(), &response_size, 4);
+
+      if (header.api_version > 4 | header.api_version < 0) {
+        int16_t error_code = htons(35);
+        std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
+      }
+  }
+
   void build_api_version_body_response(Buffer req, Buffer& res) {
     std::string client_id = req.ReadCompactString();
     std::string client_software_version = req.ReadCompactString();
@@ -68,7 +84,6 @@ private:
     res.WriteInt16(error_code);
    
     res.writeCompactArrayLength(num_apis);
-
     res.WriteInt16(api_version_key);
     res.WriteInt16(min_version);
     res.WriteInt16(max_version);
@@ -123,8 +138,18 @@ private:
 
     res.WriteInt8(0xff);
     res.writeTagBuffer();
-
+    
     }
+
+  void read_file_log(std::filesystem::path fullpath, Buffer& buf) {
+    std::vector<uint8_t>temp;
+    std::ifstream inFile(fullpath, std::ios::binary | std::ios::ate);
+    size_t file_size = inFile.tellg();
+    
+    inFile.read(reinterpret_cast<char*>(&temp), file_size);
+    buf.writeBytes(temp);
+  }
+
 };
 
 int main(int argc, char *argv[]) {
