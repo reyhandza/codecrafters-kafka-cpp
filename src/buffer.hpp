@@ -1,6 +1,13 @@
 #pragma once
+#include <cstddef>
+#include <cstdint>
 #include <string>
+#include <array>
 #include <vector>
+#include <cstring>
+#include <arpa/inet.h>
+
+using UUID = std::array<char, 16>;
 
 class Buffer {
 public:
@@ -9,8 +16,10 @@ public:
     buffer.assign(raw_buffer, raw_buffer + size);
   }
 
-  std::vector<uint8_t> GetData() { return buffer; }
+  std::vector<uint8_t>& GetData() { return buffer; }
   size_t GetSize() const { return buffer.size(); }
+  size_t GetReadOffset() const { return read_offset; }
+  
   
   int8_t ReadInt8() { return static_cast<int8_t>(buffer[read_offset++]); }
   int16_t ReadInt16() {
@@ -27,6 +36,27 @@ public:
     return ntohl(val);
   }
 
+  int64_t ReadInt64() {
+    int64_t val;
+    std::memcpy(&val, &buffer[read_offset], sizeof(int64_t));
+    read_offset += sizeof(int64_t);
+
+    const uint8_t* b = &buffer[read_offset - sizeof(int64_t)];
+    return static_cast<int64_t>(
+        (uint64_t)b[0] << 56 | (uint64_t)b[1] << 48 |
+        (uint64_t)b[2] << 40 | (uint64_t)b[3] << 32 |
+        (uint64_t)b[4] << 24 | (uint64_t)b[5] << 16 |
+        (uint64_t)b[6] <<  8 | (uint64_t)b[7]
+    );
+  }
+  
+  UUID ReadUUID() {
+    UUID id;
+    memcpy(&id, &buffer[read_offset], sizeof(UUID));
+    read_offset += sizeof(UUID);
+    return id;
+  }
+
   uint32_t ReadUnsignedVarint() {
     uint32_t value = 0;
     int i = 0;
@@ -38,6 +68,12 @@ public:
     } while (b & 0x80);
     return value;
   }
+
+  // zig-zag varint
+  int32_t ReadSignedVarint() {
+    uint32_t n = ReadUnsignedVarint();
+    return (int32_t)((n >> 1) ^ -(int32_t)(n & 1));
+}
 
   std::string ReadCompactString() {
     uint32_t len = ReadUnsignedVarint(); 
@@ -93,6 +129,10 @@ public:
   }
 
   void writeBytes(const std::vector<uint8_t>& bytes) {
+    buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+  }
+
+  void writeUUID(const UUID& bytes) {
     buffer.insert(buffer.end(), bytes.begin(), bytes.end());
   }
 

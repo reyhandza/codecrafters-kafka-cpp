@@ -1,7 +1,8 @@
 #include <cstdint>
-#include <fstream>
 #include <iostream>
 #include <thread>
+#include <filesystem>
+#include "metadata.hpp"
 #include "server.hpp"
 #include "buffer.hpp"
 
@@ -14,6 +15,8 @@ struct HeaderV0 {
 
 class Protocol {
 public:
+  Protocol(Metadata storage) : storage_(storage) {};
+
   void handle_client(int client_fd){
     while (true) {
       int32_t message_size_be;
@@ -40,6 +43,7 @@ public:
   }
 
 private:
+  Metadata storage_;
   const uint32_t num_apis = 2;
   const uint16_t min_version = 0;
   const uint16_t max_version = 4;
@@ -47,10 +51,10 @@ private:
   const uint16_t api_describe_topic_partitions = 75;
 
   void read_request_header(Buffer& req, HeaderV0& dst) {
-      int16_t api_key = req.ReadInt16();
-      int16_t api_version = req.ReadInt16();
-      int32_t correlation_id = req.ReadInt32();
-      std::string client_id = req.ReadNullableString();
+      dst.api_key = req.ReadInt16();
+      dst.api_version = req.ReadInt16();
+      dst.correlation_id = req.ReadInt32();
+      dst.client_id = req.ReadNullableString();
       req.SkipTagBuffer();
   }
   
@@ -69,7 +73,7 @@ private:
       int32_t response_size = htonl(res_buf.GetSize() - 4);
       std::memcpy(res_buf.GetData().data(), &response_size, 4);
 
-      if (src.api_version > 4 | src.api_version < 0) {
+      if (src.api_version > 4 || src.api_version < 0) {
         int16_t error_code = htons(35);
         std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
       }
@@ -98,10 +102,10 @@ private:
   }
 
   void build_decribe_body_partitions_body_response(Buffer& buf, Buffer& res) {
+    std::vector<std::string> topics;
+    
     uint32_t topic_array_length = buf.ReadUnsignedVarint();
     uint32_t num_topics = topic_array_length - 1;
-
-    std::vector<std::string> topics;
     for (uint32_t i = 0; i < num_topics; i++) {
       std::string topic_name = buf.ReadCompactString();
       buf.SkipTagBuffer();
@@ -117,18 +121,18 @@ private:
 
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
-      int16_t error_code = 3;
+      int16_t error_code = storage_.IsTopicAvailable(topic) ? 0 : 3;
       res.WriteInt16(error_code);
 
       res.writeCompactString(topic);
 
-      std::vector<uint8_t> topic_id(16,0);
-      res.writeBytes(topic_id);
+      UUID uuid = storage_.GetUUID(topic);
+      res.writeUUID(uuid);
 
       bool is_internal = false;
       res.WriteInt8(is_internal ? 1 : 0);
 
-      res.writeCompactArrayLength(0);
+      res.writeCompactArrayLength(0); // TODO
 
       int32_t authorized_op = 0;
       res.WriteInt32(authorized_op);
@@ -141,21 +145,16 @@ private:
     
     }
 
-  void read_file_log(std::filesystem::path fullpath, Buffer& buf) {
-    std::vector<uint8_t>temp;
-    std::ifstream inFile(fullpath, std::ios::binary | std::ios::ate);
-    size_t file_size = inFile.tellg();
-    
-    inFile.read(reinterpret_cast<char*>(&temp), file_size);
-    buf.writeBytes(temp);
-  }
-
 };
 
 int main(int argc, char *argv[]) {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
   std::cerr << "Logs from your program will appear here!\n";
+
+  std::filesystem::path path = "/tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log";
+  Metadata log_file;
+  log_file.load(path);
 
   int server_fd = Server::createSocket();
 
@@ -169,7 +168,7 @@ int main(int argc, char *argv[]) {
                &client_addr_len);
     std::cout << "Client connected\n";
 
-    std::thread([client_fd]() { Protocol conn; conn.handle_client(client_fd); }).detach();
+    std::thread([client_fd, log_file]() { Protocol conn(log_file); conn.handle_client(client_fd); }).detach();
   }
 
   close(server_fd);
