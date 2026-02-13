@@ -152,9 +152,10 @@ public:
   }
 
   void ResetOffset() { read_offset = 0; }
+  void SetReadOffset(size_t offset) { read_offset = offset; }
+  bool HasBytes(size_t n) const { return read_offset + n <= buffer.size(); }
 
 private:
   std::vector<uint8_t> buffer;
   size_t read_offset = 0;
 };
-

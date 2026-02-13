@@ -2,6 +2,7 @@
 #include <iostream>
 #include <thread>
 #include <filesystem>
+#include <vector>
 #include "metadata.hpp"
 #include "server.hpp"
 #include "buffer.hpp"
@@ -111,40 +112,53 @@ private:
       buf.SkipTagBuffer();
       topics.push_back(topic_name);
     }
-
     int32_t response_partition_limit = buf.ReadInt32();
     int8_t cursor_present = buf.ReadInt8();
     buf.SkipTagBuffer();
 
     res.writeTagBuffer();
     res.WriteInt32(0); // throttle_ms
-
     res.writeCompactArrayLength(topics.size());
     for (auto topic: topics) {
       int16_t error_code = storage_.IsTopicAvailable(topic) ? 0 : 3;
       res.WriteInt16(error_code);
 
+      // Always echo back the requested topic name (even on error_code 3)
       res.writeCompactString(topic);
 
-      UUID uuid = storage_.GetUUID(topic);
+      UUID uuid = storage_.GetTopicInfo(topic).uuid;
       res.writeUUID(uuid);
 
       bool is_internal = false;
       res.WriteInt8(is_internal ? 1 : 0);
-
-      res.writeCompactArrayLength(0); // TODO
-
+       
+      res.writeCompactArrayLength(storage_.GetPartitionSize(uuid));
+      for (auto part : storage_.GetPartitionInfo(uuid)){
+        res.WriteInt16(0); // error_code = 0
+        res.WriteInt32(part.partition_id);
+        res.WriteInt32(part.leader_id);
+        res.WriteInt32(part.leader_epoch);
+        res.writeCompactArrayLength(part.replica_nodes.size());
+        for (auto replica : part.replica_nodes) {
+          res.WriteInt32(0);
+        }
+        // assume isr_nodes is identical
+        res.writeCompactArrayLength(0);
+        int32_t eligible_leader_replica = 0;
+        int32_t last_known_elr = 0;
+        int32_t offline_replica = 0;
+        res.writeUnsignedVarint(eligible_leader_replica);
+        res.writeUnsignedVarint(last_known_elr);
+        res.writeUnsignedVarint(offline_replica);
+        res.writeTagBuffer();
+      }
       int32_t authorized_op = 0;
       res.WriteInt32(authorized_op);
-
       res.writeTagBuffer();
     }
-
-    res.WriteInt8(0xff);
+    res.WriteInt8(0xff); // next_cursor is null = -1
     res.writeTagBuffer();
-    
     }
-
 };
 
 int main(int argc, char *argv[]) {
