@@ -111,6 +111,21 @@ public:
     buffer.insert(buffer.end(), ptr, ptr + sizeof(int32_t));
   }
 
+  void WriteInt64(const int64_t& val) {
+    const uint64_t u = static_cast<uint64_t>(val);
+    const uint8_t bytes[8] = {
+      static_cast<uint8_t>(u >> 56),
+      static_cast<uint8_t>(u >> 48),
+      static_cast<uint8_t>(u >> 40),
+      static_cast<uint8_t>(u >> 32),
+      static_cast<uint8_t>(u >> 24),
+      static_cast<uint8_t>(u >> 16),
+      static_cast<uint8_t>(u >>  8),
+      static_cast<uint8_t>(u      ),
+    };
+    buffer.insert(buffer.end(), bytes, bytes + sizeof(bytes));
+  }  
+
   void writeUnsignedVarint(uint32_t value) {
     while ((value & 0xffffff80) != 0L) {
       uint8_t b = (value & 0x7f) | 0x80;

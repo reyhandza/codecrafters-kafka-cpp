@@ -45,11 +45,13 @@ public:
 
 private:
   Metadata storage_;
-  const uint32_t num_apis = 2;
+  const uint32_t num_apis = 3;
   const uint16_t min_version = 0;
   const uint16_t max_version = 4;
   const uint16_t api_version_key = 18;
   const uint16_t api_describe_topic_partitions = 75;
+  const uint16_t api_produce_key = 0;
+  const uint16_t max_api_produce = 11;
 
   void read_request_header(Buffer& req, HeaderV0& dst) {
       dst.api_key = req.ReadInt16();
@@ -65,9 +67,14 @@ private:
 
       if (src.api_key == api_describe_topic_partitions) {
         build_decribe_body_partitions_body_response(req_buf, res_buf);
-      } else if (src.api_key == api_version_key) {
+      } 
+      else if (src.api_key == api_version_key) {
         build_api_version_body_response(req_buf, res_buf);
-      } else { 
+      }
+      else if (src.api_key == api_produce_key) {
+        build_api_produce_response(req_buf, res_buf);
+      }
+      else { 
         std::cerr << "Unknown api_key: " << src.api_key << std::endl; 
       }
       
@@ -78,6 +85,75 @@ private:
         int16_t error_code = htons(35);
         std::memcpy(res_buf.GetData().data() + 8, &error_code, 2);
       }
+  }
+
+  void build_api_produce_response(Buffer& req, Buffer& res) {
+    req.ReadNullableString(); // Transactional ID
+    req.ReadInt16();          // Required ACKs
+    req.ReadInt32();          // Timeout
+    int32_t topic_len= req.ReadUnsignedVarint();
+    for (int32_t i = 0; i < topic_len; i++) {
+      std::string topic_name = req.ReadCompactString(); 
+
+      int32_t partition_len = req.ReadUnsignedVarint();
+      for (int32_t p = 0; p < partition_len; p++) {
+        int32_t partition_id = req.ReadInt32();      // Partition index
+        int16_t error_code = 16;
+
+        int32_t record_batch_len = req.ReadUnsignedVarint();
+        for (int32_t b = 0; b < record_batch_len; b++) {
+          int64_t base_offset = req.ReadInt64();    // Base offset
+
+          req.ReadInt32();    // Batch size
+          req.ReadInt32();    // Partition leader epoch
+          req.ReadInt8();     // Magic byte
+          req.ReadInt32();    // CRC32
+          req.ReadInt16();    // Attributes
+          req.ReadInt32();    // Last offset delta
+          req.ReadInt64();    // First timestamp
+          req.ReadInt64();    // Last timestamp
+          req.ReadInt64();    // Proucer ID
+          req.ReadInt16();    // Producer epoch
+          req.ReadInt16();    // Producer epoch
+          req.ReadInt32();    // Base sequence
+          int32_t record_len = req.ReadInt32();
+            for (int32_t r = 0; r < record_len; r++) {
+            req.ReadSignedVarint();   // Record size
+            req.ReadInt8();           // Attributes
+            req.ReadSignedVarint();   // Timestamp delta
+            req.ReadSignedVarint();   // Offset delta
+            req.ReadSignedVarint();   // Key len
+            req.ReadSignedVarint();   // Offset delta
+            req.ReadSignedVarint();   // Value len
+            req.ReadSignedVarint();   // Value in UTF-8
+            req.ReadSignedVarint();   // Headers count
+          }
+        }
+        req.SkipTagBuffer();
+      }
+      req.SkipTagBuffer();
+    }
+    req.SkipTagBuffer();
+    
+    // Start build res 
+    res.SkipTagBuffer();
+    res.writeCompactArrayLength(topic_len);   // topic len
+    for (int32_t i = 0; i < topic_len; i++) {
+      res.writeCompactString("");           // topic_name
+      res.writeUnsignedVarint(0);       // partition_len
+      for (int32_t p = 0; p < 0; p++) {
+        res.WriteInt32(0);   // partition_id
+        res.WriteInt16(0);     // error_code
+        res.WriteInt64(0);    // base_offset
+        res.WriteInt64(0xff); // Log append time
+        res.WriteInt64(0);    // Error message
+        res.writeCompactNullableString(0);
+        res.writeTagBuffer();
+      }
+      res.writeTagBuffer();
+    }
+    res.WriteInt32(0);    // Throttle time 
+    res.writeTagBuffer();
   }
 
   void build_api_version_body_response(Buffer& req, Buffer& res) {
@@ -96,6 +172,10 @@ private:
     res.WriteInt16(api_describe_topic_partitions);
     res.WriteInt16(min_version);
     res.WriteInt16(min_version);
+    res.writeTagBuffer();
+    res.WriteInt16(api_produce_key);
+    res.WriteInt16(min_version);
+    res.WriteInt16(max_api_produce);
     res.writeTagBuffer();
 
     res.WriteInt32(0); // throttle_ms
@@ -119,11 +199,15 @@ private:
     res.writeTagBuffer();
     res.WriteInt32(0); // throttle_ms
     res.writeCompactArrayLength(topics.size());
+    
+    // Sort in alphabetically
+    std::sort(topics.begin(), topics.end());
     for (auto topic: topics) {
       int16_t error_code = storage_.IsTopicAvailable(topic) ? 0 : 3;
       res.WriteInt16(error_code);
 
       // Always echo back the requested topic name (even on error_code 3)
+      std::cout << "Topic: " << topic << std::endl;
       res.writeCompactString(topic);
 
       UUID uuid = storage_.GetTopicInfo(topic).uuid;
