@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <iostream>
 #include <cstddef>
 #include <cstdint>
@@ -37,7 +38,7 @@ public:
     return partitions.size();
   }
 
-  TopicInfo GetTopicInfo(const std::string& topic_name) {
+  TopicInfo GetTopicInfo(const std::string& topic_name) const {
     auto iter = topics_.find(topic_name);
     if (iter == topics_.end()) {
       std::cerr << "Topic didn't match any keys\n";
@@ -46,7 +47,7 @@ public:
     return iter->second;
   }
 
-  std::vector<PartitionInfo> GetPartitionInfo(const UUID id) {
+  std::vector<PartitionInfo> GetPartitionInfo(const UUID& id) const {
     auto iter = partitions_.find(id);
     if (iter == partitions_.end()) {
       std::cerr << "UUID didn't match any partitions\n";
@@ -55,12 +56,18 @@ public:
     return iter->second;
   }
 
-  void AddTopicInfo (const TopicInfo& src) {
-    topics_[src.topic_name] = src;
+  bool IsTopicAvailable(std::string& name) const {
+    return topics_.find(name) != topics_.end();
   }
 
-  bool IsTopicAvailable(std::string name) const {
-    return topics_.find(name) != topics_.end();
+  bool IsPartitionIndexAvailable(const UUID& uuid, int32_t& part_id) const {
+    std::vector<PartitionInfo> parts = GetPartitionInfo(uuid);
+    
+    auto iter_id = std::find_if(parts.begin(), parts.end(), [&] (const PartitionInfo& p) {
+      return p.partition_id == part_id;
+    });
+
+    return iter_id != parts.end();
   }
 
 private:

@@ -53,6 +53,15 @@ private:
   const uint16_t api_produce_key = 0;
   const uint16_t max_api_produce = 11;
 
+  struct PartitionRequest {
+    int32_t partition_id = 0;
+  };
+
+  struct TopicRequest {
+    std::string topic_name;
+    std::vector<PartitionRequest> partition_array;
+  };
+
   void read_request_header(Buffer& req, HeaderV0& dst) {
       dst.api_key = req.ReadInt16();
       dst.api_version = req.ReadInt16();
@@ -95,18 +104,7 @@ private:
     int32_t topic_len = req.ReadUnsignedVarint();
     int32_t num_topic = (topic_len > 0) ? (topic_len - 1) : 0;
     
-    struct PartitionInfo {
-      int32_t partition_id = 0;
-      int32_t error_code = 3;   // Invalid topic or partition
-    };
-
-    struct TopicRequest {
-      std::string topic_name;
-      std::vector<PartitionInfo> partition_array;
-    };
-
     std::vector<TopicRequest> results;
-    std::cout << "Num topics: " << num_topic << std::endl;
     results.reserve(num_topic);
 
     for (int32_t i = 0; i < num_topic; i++) {
@@ -117,7 +115,7 @@ private:
       tr.partition_array.reserve(num_part);
 
       for (int32_t p = 0; p < num_part; p++) {
-        PartitionInfo pin;
+        PartitionRequest pin;
         pin.partition_id = req.ReadInt32();
         int32_t record_batch_len = req.ReadUnsignedVarint() - 1; // Size of record batch not num of batch
 
@@ -137,16 +135,28 @@ private:
     
     // Start build res 
     res.writeTagBuffer();
+
     res.writeCompactArrayLength(static_cast<int>(results.size()));
     for (auto& topic : results) {
       res.writeCompactString(topic.topic_name);
+      const bool topic_ok = storage_.IsTopicAvailable(topic.topic_name);
+      const UUID uuid = topic_ok ? storage_.GetTopicInfo(topic.topic_name).uuid : UUID {};
+      
       res.writeCompactArrayLength(static_cast<int>(topic.partition_array.size()));
       for (auto& part : topic.partition_array) {
+        const bool partition_ok = storage_.IsPartitionIndexAvailable(uuid, part.partition_id);
+        int16_t ec = 0;
+        if (!topic_ok || !partition_ok) {
+          ec = 3;
+        } 
+
+        int64_t base_offset = ec == 0 ? 0 : -1;
+        int64_t log_start_offset = ec == 0 ? 0 : -1;
         res.WriteInt32(part.partition_id);
-        res.WriteInt16(part.error_code);
-        res.WriteInt64(-1);              // Base_offset
-        res.WriteInt64(-1);              // Log append time
-        res.WriteInt64(-1);              // Log start offset
+        res.WriteInt16(ec);
+        res.WriteInt64(base_offset);
+        res.WriteInt64(-1);                // Log append time
+        res.WriteInt64(log_start_offset);
         res.writeCompactArrayLength(0); // Record array len
         res.writeCompactNullableString(nullptr); // Error message
         res.writeTagBuffer();
