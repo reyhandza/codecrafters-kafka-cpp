@@ -13,6 +13,7 @@
 struct TopicInfo {
   std::string topic_name;
   UUID uuid;
+  int32_t partition_len;
   bool found = false;
 };
 
@@ -52,6 +53,10 @@ public:
       return {};
     }
     return iter->second;
+  }
+
+  void AddTopicInfo (const TopicInfo& src) {
+    topics_[src.topic_name] = src;
   }
 
   bool IsTopicAvailable(std::string name) const {
@@ -133,8 +138,6 @@ private:
           info.uuid       = buf.ReadUUID();
           info.found      = true;
           topics_[info.topic_name] = info;
-
-          std::cerr << "topic saved: " << info.topic_name << std::endl;
 
           buf.SkipTagBuffer();          // record-level tag buffer
           buf.ReadUnsignedVarint();     // headers array (compact array length = 1 → 0 headers)
